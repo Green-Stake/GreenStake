@@ -33,7 +33,9 @@ contract Donate is ReentrancyGuard, Ownable {
     event FundsDistributed(uint256 indexed projectId, uint256 ownerShare, uint256 daoShare, uint256 platformFee);
 
     // Constructor to set the ProjectListing and DAO contract addresses
-    constructor(address _projectListingContract, address _daoContract) Ownable(msg.sender){
+    constructor(address _projectListingContract, address _daoContract) Ownable(msg.sender) {
+        require(_projectListingContract != address(0), "Invalid ProjectListing address");
+        require(_daoContract != address(0), "Invalid DAO address");
         projectListingContract = _projectListingContract;
         daoContract = _daoContract;
     }
@@ -57,60 +59,85 @@ contract Donate is ReentrancyGuard, Ownable {
         // Update donor donations
         donorDonations[msg.sender].push(newDonation);
 
+        // Record donation in ProjectListing contract
+        (bool success, ) = projectListingContract.call(
+            abi.encodeWithSignature("recordDonation(uint256,uint256)", projectId, msg.value)
+        );
+        require(success, "Failed to record donation in ProjectListing");
+
         // Distribute funds
         _distributeFunds(projectId, msg.value);
 
         // Emit event
         emit DonationReceived(projectId, msg.sender, msg.value);
     }
-// Internal function to distribute funds
-function _distributeFunds(uint256 projectId, uint256 amount) internal {
-    // Calculate shares
-    uint256 ownerShare = (amount * 80) / 100; // 80% to project owner
-    uint256 daoShare = (amount * 15) / 100;  // 15% to DAO members
-    uint256 platformFee = (amount * 5) / 100; // 5% to platform
 
-    // Retrieve project owner address from ProjectListing.sol
-    (bool successProjectOwner, bytes memory projectOwnerData) = projectListingContract.call(
-        abi.encodeWithSignature("getProjectOwner(uint256)", projectId)
-    );
-    require(successProjectOwner, "Failed to retrieve project owner");
-    address projectOwner = abi.decode(projectOwnerData, (address));
+    // Internal function to distribute funds
+    function _distributeFunds(uint256 projectId, uint256 amount) internal {
+        // Calculate shares
+        uint256 ownerShare = (amount * 80) / 100; // 80% to project owner
+        uint256 daoShare = (amount * 15) / 100;   // 15% to DAO members
+        uint256 platformFee = (amount * 5) / 100;  // 5% to platform
 
-    // Send 80% to the project owner
-    payable(projectOwner).transfer(ownerShare);
+        // Get project details from ProjectListing
+        (bool success, bytes memory data) = projectListingContract.call(
+            abi.encodeWithSignature("getProject(uint256)", projectId)
+        );
+        require(success, "Failed to get project details");
 
-    // Retrieve DAO member addresses from DAO.sol
-    (bool successDAOMembers, bytes memory daoMembersData) = daoContract.call(
-        abi.encodeWithSignature("getDAOMembers()")
-    );
-    require(successDAOMembers, "Failed to retrieve DAO members");
-    address[] memory daoMembers = abi.decode(daoMembersData, (address[]));
+        // Decode project details
+        (
+            string memory name,
+            string memory description,
+            address owner,
+            bool isListed,
+            bool isApproved,
+            uint256 totalDonations,
+            uint256 subscriptionEndTime
+        ) = abi.decode(data, (string, string, address, bool, bool, uint256, uint256));
 
-    // Distribute 15% among DAO members
-    if (daoMembers.length > 0) {
-        uint256 sharePerMember = daoShare / daoMembers.length;
-        for (uint256 i = 0; i < daoMembers.length; i++) {
-            payable(daoMembers[i]).transfer(sharePerMember);
+        require(isListed && isApproved, "Project is not listed or not approved");
+        require(block.timestamp <= subscriptionEndTime, "Project subscription has expired");
+
+        // Send shares to respective parties
+        payable(owner).transfer(ownerShare);
+
+        // Get DAO members
+        (bool daoSuccess, bytes memory daoData) = daoContract.call(
+            abi.encodeWithSignature("getDAOMembers()")
+        );
+        require(daoSuccess, "Failed to get DAO members");
+        address[] memory daoMembers = abi.decode(daoData, (address[]));
+
+        if (daoMembers.length > 0) {
+            // Distribute DAO share among members
+            uint256 sharePerMember = daoShare / daoMembers.length;
+            for (uint256 i = 0; i < daoMembers.length; i++) {
+                payable(daoMembers[i]).transfer(sharePerMember);
+            }
+        } else {
+            // If no DAO members, send DAO share to platform
+            platformFee += daoShare;
         }
-    } else {
-        // If no DAO members, send the DAO share to the platform
-        platformFee += daoShare;
+
+        // Send platform fee to contract owner
+        payable(super.owner()).transfer(platformFee);
+
+        emit FundsDistributed(projectId, ownerShare, daoShare, platformFee);
     }
 
-    // Retrieve platform wallet address (contract owner) from ProjectListing.sol
-    (bool successPlatformWallet, bytes memory platformWalletData) = projectListingContract.call(
-        abi.encodeWithSignature("owner()")
-    );
-    require(successPlatformWallet, "Failed to retrieve platform wallet");
+    // Function to get donations for a project
+    function getProjectDonations(uint256 projectId) external view returns (Donation[] memory) {
+        return projectDonations[projectId];
+    }
 
-    // Decode the platform wallet address
-    address platformWallet = abi.decode(platformWalletData, (address));
+    // Function to get donations by a donor
+    function getDonorDonations(address donor) external view returns (Donation[] memory) {
+        return donorDonations[donor];
+    }
 
-    // Send 5% to the platform
-    payable(platformWallet).transfer(platformFee);
-
-    // Emit event
-    emit FundsDistributed(projectId, ownerShare, daoShare, platformFee);
-}
+    // Function to get total donations for a project
+    function getProjectTotalDonations(uint256 projectId) external view returns (uint256) {
+        return totalDonationsPerProject[projectId];
+    }
 }

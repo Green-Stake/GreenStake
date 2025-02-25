@@ -18,3 +18,14 @@ Deploying DAO...
 DAO deployed to: 0xA5124D1c1f6e06F6956f77DE2917983D93840993
 Deploying Donate...
 Donate deployed to: 0x4C597Bc2CC4ca87efC738EFDeFD487E27833df4a
+
+
+ DAO Contract
+    ✔ Should allow a user to join the DAO by staking
+    ✔ Should not allow a user to join DAO with insufficient stake
+    ✔ Should receive a project request from ProjectListing
+    ✔ Should allow DAO members to vote on projects
+    ✔ Should process a project request and approve/reject based on votes
+
+
+  5 passing (1s)

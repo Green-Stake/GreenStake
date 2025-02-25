@@ -9,7 +9,16 @@ if (!ALCHEMY_API_KEY || !DEPLOYER_PRIVATE_KEY) {
 }
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.25",
+  solidity: {
+    version: "0.8.25",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      viaIR: true,
+    },
+  },
   networks: {
     arbitrumSepolia: {
       url: `https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
