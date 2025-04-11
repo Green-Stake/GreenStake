@@ -48,41 +48,44 @@ contract DAO is ReentrancyGuard, Ownable {
     event ProjectRejected(uint256 indexed projectId);
     event NewMember(address indexed member, uint256 stakedAmount);
 
+    // Modifiers
+    modifier onlyMember() {
+        require(members[msg.sender].isMember, "Not a DAO member");
+        _;
+    }
+
     // Constructor to set the ProjectListing contract address and minimum stake amount
     constructor(address _projectListingContract, uint256 _minStakeAmount) Ownable(msg.sender) {
+        require(_projectListingContract != address(0), "Invalid ProjectListing address");
         projectListingContract = _projectListingContract;
         minStakeAmount = _minStakeAmount;
     }
 
-    // Modifier to check if the caller is a DAO member
-    modifier onlyMember() {
-        require(members[msg.sender].isMember, "Caller is not a DAO member");
-        _;
+    // Function to set the ProjectListing contract address
+    function setProjectListingContract(address _projectListingContract) external onlyOwner {
+        require(_projectListingContract != address(0), "Invalid ProjectListing contract address");
+        projectListingContract = _projectListingContract;
     }
 
-    // Function to become a DAO member by staking ETH
+    // Function to join the DAO by staking tokens
     function joinDAO() external payable nonReentrant {
         require(msg.value >= minStakeAmount, "Insufficient stake amount");
         require(!members[msg.sender].isMember, "Already a DAO member");
 
-        // Add the user as a DAO member
         members[msg.sender] = Member({
             stakedAmount: msg.value,
             isMember: true
         });
-
-        // Add the member's address to the list
         memberAddresses.push(msg.sender);
 
-        // Emit event
         emit NewMember(msg.sender, msg.value);
     }
 
     // Function to receive project requests from ProjectListing.sol
     function receiveProjectRequest(uint256 projectId, address projectOwner, string memory name, string memory description) external {
         require(msg.sender == projectListingContract, "Caller is not the ProjectListing contract");
+        require(projectRequests[projectId].projectId == 0, "Project request already exists");
 
-        // Create a new project request
         projectRequests[projectId] = ProjectRequest({
             projectId: projectId,
             projectOwner: projectOwner,
@@ -94,92 +97,71 @@ contract DAO is ReentrancyGuard, Ownable {
             isProcessed: false
         });
 
-        // Emit event
         emit ProjectRequestReceived(projectId, projectOwner, name, description);
     }
 
-    // Function for DAO members to vote on a project request
-    function vote(uint256 projectId, bool vote) external onlyMember {
-        ProjectRequest storage request = projectRequests[projectId];
-        require(request.projectId != 0, "Project request does not exist");
-        require(!request.isProcessed, "Project request already processed");
+    // Function to vote on a project request
+    function voteOnProject(uint256 projectId, bool voteInFavor) external onlyMember {
         require(!hasVoted[projectId][msg.sender], "Already voted on this project");
+        require(!projectRequests[projectId].isProcessed, "Project request already processed");
 
-        // Update vote count
-        if (vote) {
+        ProjectRequest storage request = projectRequests[projectId];
+        hasVoted[projectId][msg.sender] = true;
+
+        if (voteInFavor) {
             request.yesVotes++;
         } else {
             request.noVotes++;
         }
 
-        // Mark the member as having voted
-        hasVoted[projectId][msg.sender] = true;
+        emit Voted(projectId, msg.sender, voteInFavor);
 
-        // Emit event
-        emit Voted(projectId, msg.sender, vote);
-
-        // Auto-process if all members have voted
+        // Check if we have enough votes to process the request
         uint256 totalVotes = request.yesVotes + request.noVotes;
-        if (totalVotes == memberAddresses.length) {
+        if (totalVotes >= memberAddresses.length / 2) {
             _processProjectRequest(projectId);
         }
     }
 
-    // Internal function to process a project request
+    // Internal function to process a project request after voting
     function _processProjectRequest(uint256 projectId) internal {
         ProjectRequest storage request = projectRequests[projectId];
         require(!request.isProcessed, "Project request already processed");
 
         // Check if the project has a majority of yes votes
-        request.isApproved = request.yesVotes > request.noVotes;
-        request.isProcessed = true;
-
-        // If approved, notify the ProjectListing contract
-        if (request.isApproved) {
+        if (request.yesVotes > request.noVotes) {
+            request.isApproved = true;
+            // Call approveProject on ProjectListing contract
             (bool success, ) = projectListingContract.call(
                 abi.encodeWithSignature("approveProject(uint256)", projectId)
             );
             require(success, "Failed to approve project in ProjectListing");
             emit ProjectApproved(projectId);
         } else {
+            request.isApproved = false;
             emit ProjectRejected(projectId);
         }
+
+        request.isProcessed = true;
+    }
+
+    // Function to get member count
+    function getMemberCount() external view returns (uint256) {
+        return memberAddresses.length;
+    }
+
+    // Function to check if an address is a member
+    function isMember(address account) external view returns (bool) {
+        return members[account].isMember;
+    }
+
+    // Function to get member stake amount
+    function getMemberStake(address account) external view returns (uint256) {
+        return members[account].stakedAmount;
     }
 
     // Function to get all DAO members
     function getDAOMembers() external view returns (address[] memory) {
         return memberAddresses;
-    }
-
-    // Function to update the ProjectListing contract address (only callable by the owner)
-    function updateProjectListingContract(address newProjectListingContract) external onlyOwner {
-        require(newProjectListingContract != address(0), "Invalid address");
-        projectListingContract = newProjectListingContract;
-    }
-
-    // Function to update the minimum stake amount (only callable by the owner)
-    function updateMinStakeAmount(uint256 newAmount) external onlyOwner {
-        minStakeAmount = newAmount;
-    }
-
-    // Function to get the number of members
-    function getMemberCount() external view returns (uint256) {
-        return memberAddresses.length;
-    }
-
-    // Function to get project request details
-    function getProjectRequest(uint256 projectId) external view returns (
-        uint256 yesVotes,
-        uint256 noVotes,
-        bool isApproved,
-        bool isProcessed
-    ) {
-        ProjectRequest storage request = projectRequests[projectId];
-        return (
-            request.yesVotes,
-            request.noVotes,
-            request.isApproved,
-            request.isProcessed
-        );
     }
 }

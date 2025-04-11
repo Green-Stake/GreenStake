@@ -74,7 +74,7 @@ describe("DAO Contract", function () {
         await dao.connect(user1).voteOnProject(projectId, true); // 1 Yes Vote
         await dao.connect(user2).voteOnProject(projectId, true); // 2 Yes Votes
 
-        await dao.connect(owner).processProjectRequest(projectId);
+        await dao.connect(owner).projectRequests(projectId);
 
         const project = await dao.projectRequests(projectId);
         expect(project.isApproved).to.be.true;

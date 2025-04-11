@@ -1,8 +1,6 @@
 {
-  "projectListing": "0x01D0CfEb9ecDc082839503Ae92BE26E16cA1d1dd",
-  "dao": "0x7599D04ABad613d2D4A853d60066bb34F19013c9",
-  "donate": "0x1c7E794B14d51DbB80D7b73c25EFcF60DcEF1aF9",
-  "network": "arbitrumSepolia",
-  "subscriptionFee": "0.01",
-  "minStakeAmount": "0.01"
+  "projectListing": "0xf03abe69D97bbc624DB4AE07C5dbddEaD412eF42",
+  "dao": "0x82b9ccAEC5F37FB71EE59fF246ca276F2aFC5768",
+  "donate": "0x368Aeb2834d445F0BC2264a51feE0d6a7Bd07526",
+  "network": "arbitrumSepolia"
 }

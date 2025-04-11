@@ -20,9 +20,7 @@ describe("ProjectListing Contract", function () {
     // Deploy the contract with three constructor parameters:
     // _subscriptionFee, _daoContract, _donateContract
     projectListing = (await ProjectListingFactory.deploy(
-      ethers.parseEther("1"),              // Subscription fee
-      await daoSigner.getAddress(),        // DAO contract address
-      await donateSigner.getAddress()        // Donate contract address
+      ethers.parseEther("1")               // Subscription fee
     )) as ProjectListing;
 
     await projectListing.waitForDeployment();

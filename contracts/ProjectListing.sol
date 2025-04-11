@@ -58,7 +58,7 @@ contract ProjectListing is ReentrancyGuard, Ownable {
     }
 
     // Function to set the DAO contract address
-    function setDAOContract(address _daoContract) external onlyOwner {
+    function setDaoContract(address _daoContract) external onlyOwner {
         require(_daoContract != address(0), "Invalid DAO contract address");
         daoContract = _daoContract;
     }
